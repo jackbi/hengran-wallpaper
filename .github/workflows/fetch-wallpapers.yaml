@@ -1,0 +1,110 @@
+name: Fetch Wallpapers
+
+on:
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: "获取页数 (每页约24张壁纸)"
+        required: false
+        default: "5"
+        type: string
+      params:
+        description: "自定义 API 参数 (可选，例如: ratios=9x16&sorting=favorites)"
+        required: false
+        type: string
+
+# 防止多个工作流同时运行
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+# 最小权限原则
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Fetch and download wallpapers
+        run: |
+          PAGES="${{ github.event.inputs.pages || '5' }}"
+          PARAMS="${{ github.event.inputs.params }}"
+
+          echo "🚀 Starting wallpaper download"
+          echo "📄 Pages: $PAGES"
+
+          # 构建命令
+          CMD="bun run src/fetch-wallpapers.ts --pages=$PAGES"
+
+          if [ -n "$PARAMS" ]; then
+            CMD="$CMD --params=$PARAMS"
+          fi
+
+          # 执行命令
+          eval $CMD
+
+          echo "✅ Download completed"
+
+      - name: Commit and push images
+        run: |
+          # Configure git
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          # Stage all changes
+          git add -A
+
+          # Check if there are changes to commit
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "📝 Committing new wallpapers"
+            git commit -m "chore: [bot] add new wallpapers"
+
+            echo "⬆️  Pushing to remote..."
+            git push
+
+            echo "✅ Changes pushed successfully"
+          else
+            echo "ℹ️  No new wallpapers to commit"
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          JOB_STATUS="${{ job.status }}"
+
+          echo "### Workflow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Pages**: ${{ github.event.inputs.pages || '5' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Job Status**: $JOB_STATUS" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$JOB_STATUS" = "success" ]; then
+            echo "🎉 **Result**: Wallpapers downloaded and committed successfully" >> $GITHUB_STEP_SUMMARY
+          elif [ "$JOB_STATUS" = "failure" ]; then
+            echo "❌ **Result**: Workflow failed, check logs for details" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Result**: Workflow cancelled or unknown status" >> $GITHUB_STEP_SUMMARY
+          fi

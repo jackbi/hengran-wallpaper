@@ -1,9 +1,10 @@
 {
-  "name": "app",
-  "version": "1.0.50",
+  "name": "hengran-wallpaper",
+  "version": "1.0.0",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "bun run --watch src/index.ts"
+    "dev": "bun run --watch src/index.ts",
+    "fetch": "bun run src/fetch-wallpapers.ts"
   },
   "dependencies": {
     "elysia": "latest"
