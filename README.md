@@ -131,20 +131,51 @@ https://wallhaven.cc/api/v1/search?ratios=9x16,10x16,9x18&sorting=relevance&orde
 }
 ```
 
+## 访问地址
+
+### JSON 数据
+
+```text
+https://cdn.jsdelivr.net/gh/[用户名]/hengran-wallpaper@main/index.json
+https://cdn.jsdelivr.net/gh/[用户名]/hengran-wallpaper@main/pages/page-1.json
+```
+
+### 壁纸图片
+
+```text
+https://cdn.jsdelivr.net/gh/[用户名]/hengran-wallpaper@main/images/5w52k3.png
+https://cdn.jsdmirror.com/gh/[用户名]/hengran-wallpaper@main/images/5w52k3.png
+```
+
+### 示例请求
+
+```bash
+# 获取索引数据
+curl https://cdn.jsdelivr.net/gh/[用户名]/hengran-wallpaper@main/index.json
+
+# 获取第1页图片列表
+curl https://cdn.jsdelivr.net/gh/[用户名]/hengran-wallpaper@main/pages/page-1.json
+
+# 获取壁纸图片
+curl https://cdn.jsdmirror.com/gh/[用户名]/hengran-wallpaper@main/images/5w52k3.png
+```
+
 ### 分页展示示例
 
 ```javascript
+const CDN_BASE = "https://cdn.jsdelivr.net/gh/[用户名]/hengran-wallpaper@main";
+
 // 获取总页数
-const index = await fetch('/index.json').then(r => r.json());
+const index = await fetch(`${CDN_BASE}/index.json`).then(r => r.json());
 const totalPages = index.totalPages; // 5
 
 // 获取某一页的图片列表
-const page1 = await fetch('/pages/page-1.json').then(r => r.json());
+const page1 = await fetch(`${CDN_BASE}/pages/page-1.json`).then(r => r.json());
 const images = page1.images; // ["5w52k3.png", "exxrrw.jpg", ...]
 
 // 构建图片 URL
 images.forEach(filename => {
-  const url = `/images/${filename}`;
+  const url = `${CDN_BASE}/images/${filename}`;
   // 使用 url 展示图片
 });
 ```
