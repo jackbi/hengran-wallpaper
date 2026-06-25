@@ -190,32 +190,16 @@ async function main() {
 
   console.log(`📊 Total pages available: ${firstPage.meta.last_page}`);
   console.log(`📄 Will fetch: ${startPage} to ${totalPages}`);
-
-  // 收集所有壁纸
-  let allWallpapers: Wallpaper[] = [...firstPage.data];
-
-  // 获取剩余页面
-  for (let page = startPage + 1; page <= totalPages; page++) {
-    // 添加延迟避免请求过快
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    try {
-      const pageData = await fetchPage(page, customParams);
-      allWallpapers.push(...pageData.data);
-    } catch (error) {
-      console.error(`❌ Failed to fetch page ${page}:`, error);
-    }
-  }
-
-  console.log(`\n🖼️  Total wallpapers to download: ${allWallpapers.length}`);
   console.log(`📁 Output directory: ${IMAGES_DIR}\n`);
 
-  // 下载图片
+  // 下载统计
   let downloaded = 0;
   let skipped = 0;
   let failed = 0;
 
-  for (const wallpaper of allWallpapers) {
+  // 下载第一页的图片
+  console.log(`\n📦 Processing page ${startPage}...`);
+  for (const wallpaper of firstPage.data) {
     try {
       const result = await downloadImage(wallpaper, IMAGES_DIR);
       if (result) {
@@ -229,6 +213,36 @@ async function main() {
     }
     // 下载间隔
     await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+
+  // 获取剩余页面并逐页下载
+  for (let page = startPage + 1; page <= totalPages; page++) {
+    // 添加延迟避免请求过快
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    try {
+      console.log(`\n📦 Processing page ${page}...`);
+      const pageData = await fetchPage(page, customParams);
+
+      // 立即下载当前页的图片
+      for (const wallpaper of pageData.data) {
+        try {
+          const result = await downloadImage(wallpaper, IMAGES_DIR);
+          if (result) {
+            downloaded++;
+            totalDownloaded++;
+          } else {
+            skipped++;
+          }
+        } catch (error) {
+          failed++;
+        }
+        // 下载间隔
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+    } catch (error) {
+      console.error(`❌ Failed to fetch page ${page}:`, error);
+    }
   }
 
   // 保存状态
