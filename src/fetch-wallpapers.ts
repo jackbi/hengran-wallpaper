@@ -8,6 +8,8 @@ const DEFAULT_PARAMS = "ratios=9x16,10x16,9x18&sorting=relevance&order=desc";
 // 目录配置
 const IMAGES_DIR = join(import.meta.dir, "..", "images");
 const STATE_FILE = join(import.meta.dir, "..", ".last-fetch.json");
+const PAGES_DIR = join(import.meta.dir, "..", "pages");
+const INDEX_FILE = join(import.meta.dir, "..", "index.json");
 
 interface Wallpaper {
   id: string;
@@ -86,6 +88,47 @@ async function saveState(state: FetchState): Promise<void> {
   }
 }
 
+// 保存页面数据
+async function savePageData(page: number, images: string[]): Promise<void> {
+  try {
+    await mkdir(PAGES_DIR, { recursive: true });
+    const pageFile = join(PAGES_DIR, `page-${page}.json`);
+    const pageData = {
+      page,
+      fetchedAt: new Date().toISOString(),
+      count: images.length,
+      images,
+    };
+    await writeFile(pageFile, JSON.stringify(pageData, null, 2));
+    console.log(`📄 Page ${page} data saved: ${images.length} images`);
+  } catch (error) {
+    console.warn(`⚠️  Failed to save page ${page} data:`, error);
+  }
+}
+
+// 更新总索引
+async function updateIndex(totalPages: number, totalImages: number): Promise<void> {
+  try {
+    let index = { totalPages: 0, totalImages: 0, lastUpdated: "" };
+
+    // 读取现有索引
+    if (await fileExists(INDEX_FILE)) {
+      const data = await readFile(INDEX_FILE, "utf-8");
+      index = JSON.parse(data);
+    }
+
+    // 更新索引
+    index.totalPages = totalPages;
+    index.totalImages = totalImages;
+    index.lastUpdated = new Date().toISOString();
+
+    await writeFile(INDEX_FILE, JSON.stringify(index, null, 2));
+    console.log(`📊 Index updated: ${index.totalPages} pages, ${index.totalImages} images`);
+  } catch (error) {
+    console.warn("⚠️  Failed to update index:", error);
+  }
+}
+
 // 获取单页数据
 async function fetchPage(page: number, params?: string): Promise<ApiResponse> {
   const url = `${API_BASE}?${params || DEFAULT_PARAMS}&page=${page}`;
@@ -154,8 +197,8 @@ async function main() {
   const paramsArg = args.find((arg) => arg.startsWith("--params="));
   const resetArg = args.find((arg) => arg === "--reset");
 
-  // 自定义 API 参数
-  const customParams = paramsArg ? paramsArg.split("=")[1] : undefined;
+  // 自定义 API 参数（取第一个 = 后面的所有内容）
+  const customParams = paramsArg ? paramsArg.substring(paramsArg.indexOf("=") + 1) : undefined;
 
   // 读取上次状态
   const lastState = await loadState();
@@ -196,17 +239,24 @@ async function main() {
   let downloaded = 0;
   let skipped = 0;
   let failed = 0;
+  let totalPagesProcessed = 0;
+  let totalImagesSaved = 0;
 
   // 下载第一页的图片
   console.log(`\n📦 Processing page ${startPage}...`);
+  const firstPageImages: string[] = [];
+
   for (const wallpaper of firstPage.data) {
     try {
       const result = await downloadImage(wallpaper, IMAGES_DIR);
       if (result) {
         downloaded++;
         totalDownloaded++;
+        firstPageImages.push(`${wallpaper.id}.${wallpaper.file_type.split("/")[1]}`);
       } else {
         skipped++;
+        // 已存在的图片也加入列表
+        firstPageImages.push(`${wallpaper.id}.${wallpaper.file_type.split("/")[1]}`);
       }
     } catch (error) {
       failed++;
@@ -214,6 +264,11 @@ async function main() {
     // 下载间隔
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
+
+  // 保存第一页数据
+  await savePageData(startPage, firstPageImages);
+  totalPagesProcessed++;
+  totalImagesSaved += firstPageImages.length;
 
   // 获取剩余页面并逐页下载
   for (let page = startPage + 1; page <= totalPages; page++) {
@@ -223,6 +278,7 @@ async function main() {
     try {
       console.log(`\n📦 Processing page ${page}...`);
       const pageData = await fetchPage(page, customParams);
+      const pageImages: string[] = [];
 
       // 立即下载当前页的图片
       for (const wallpaper of pageData.data) {
@@ -231,8 +287,10 @@ async function main() {
           if (result) {
             downloaded++;
             totalDownloaded++;
+            pageImages.push(`${wallpaper.id}.${wallpaper.file_type.split("/")[1]}`);
           } else {
             skipped++;
+            pageImages.push(`${wallpaper.id}.${wallpaper.file_type.split("/")[1]}`);
           }
         } catch (error) {
           failed++;
@@ -240,10 +298,18 @@ async function main() {
         // 下载间隔
         await new Promise((resolve) => setTimeout(resolve, 200));
       }
+
+      // 保存当前页数据
+      await savePageData(page, pageImages);
+      totalPagesProcessed++;
+      totalImagesSaved += pageImages.length;
     } catch (error) {
       console.error(`❌ Failed to fetch page ${page}:`, error);
     }
   }
+
+  // 更新总索引
+  await updateIndex(totalPages, totalImagesSaved);
 
   // 保存状态
   await saveState({
@@ -258,6 +324,7 @@ async function main() {
   console.log(`   ⏭️  Skipped (already exists): ${skipped}`);
   console.log(`   ❌ Failed: ${failed}`);
   console.log(`   📄 Pages fetched: ${startPage} - ${totalPages}`);
+  console.log(`   📁 Total images: ${totalImagesSaved}`);
   console.log(`\n🎉 Completed!`);
 }
 

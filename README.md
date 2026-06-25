@@ -17,6 +17,11 @@ hengran-wallpaper/
 │   └── workflows/
 │       └── fetch-wallpapers.yaml  # GitHub Actions 手动任务
 ├── images/                        # 壁纸图片
+├── pages/                         # 每页数据 JSON
+│   ├── page-1.json
+│   ├── page-2.json
+│   └── ...
+├── index.json                     # 总索引（分页数据）
 ├── src/
 │   ├── index.ts                   # Elysia 服务
 │   └── fetch-wallpapers.ts        # 下载壁纸脚本
@@ -96,6 +101,53 @@ https://wallhaven.cc/api/v1/search?ratios=9x16,10x16,9x18&sorting=relevance&orde
 
 - `5w52k3.png`
 - `exxrrw.jpg`
+
+## 数据文件
+
+### 每页数据 (`pages/page-{N}.json`)
+
+```json
+{
+  "page": 1,
+  "fetchedAt": "2024-01-15T08:00:00.000Z",
+  "count": 24,
+  "images": [
+    "5w52k3.png",
+    "exxrrw.jpg",
+    "q2w125.jpg"
+  ]
+}
+```
+
+### 总索引 (`index.json`)
+
+用于第三方展示时的分页数据：
+
+```json
+{
+  "totalPages": 5,
+  "totalImages": 120,
+  "lastUpdated": "2024-01-15T08:00:00.000Z"
+}
+```
+
+### 分页展示示例
+
+```javascript
+// 获取总页数
+const index = await fetch('/index.json').then(r => r.json());
+const totalPages = index.totalPages; // 5
+
+// 获取某一页的图片列表
+const page1 = await fetch('/pages/page-1.json').then(r => r.json());
+const images = page1.images; // ["5w52k3.png", "exxrrw.jpg", ...]
+
+// 构建图片 URL
+images.forEach(filename => {
+  const url = `/images/${filename}`;
+  // 使用 url 展示图片
+});
+```
 
 ## 注意事项
 

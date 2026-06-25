@@ -55,16 +55,17 @@ jobs:
 
           echo "🚀 Starting wallpaper download"
           echo "📄 Pages: $PAGES"
+          echo "🔧 Params: $PARAMS"
 
-          # 构建命令
-          CMD="bun run src/fetch-wallpapers.ts --pages=$PAGES"
+          # 构建参数数组
+          ARGS="--pages=$PAGES"
 
           if [ -n "$PARAMS" ]; then
-            CMD="$CMD --params=$PARAMS"
+            ARGS="$ARGS --params=$PARAMS"
           fi
 
-          # 执行命令
-          eval $CMD
+          # 执行命令（用引号包裹参数）
+          bun run src/fetch-wallpapers.ts $ARGS
 
           echo "✅ Download completed"
 
