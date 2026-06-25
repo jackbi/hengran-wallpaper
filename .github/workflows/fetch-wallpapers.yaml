@@ -74,20 +74,24 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
-          # Stage all changes
+          # Stage all changes (images + state file)
           git add -A
+
+          # Show what will be committed
+          echo "📋 Files to commit:"
+          git status --porcelain
 
           # Check if there are changes to commit
           if [ -n "$(git status --porcelain)" ]; then
-            echo "📝 Committing new wallpapers"
-            git commit -m "chore: [bot] add new wallpapers"
+            echo "📝 Committing new wallpapers and state"
+            git commit -m "chore: [bot] add wallpapers and update state"
 
             echo "⬆️  Pushing to remote..."
             git push
 
             echo "✅ Changes pushed successfully"
           else
-            echo "ℹ️  No new wallpapers to commit"
+            echo "ℹ️  No changes to commit"
           fi
 
       - name: Summary
