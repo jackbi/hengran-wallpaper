@@ -1,6 +1,19 @@
 import { mkdir, writeFile, readFile, access } from "fs/promises";
 import { join } from "path";
 
+// TinyPNG Web API 配置
+const TINYPNG_DOMAINS = [
+  "https://tinypng.com",
+  "https://tinyjpg.com",
+  "https://tinify.cn",
+];
+const COMPRESS_THRESHOLD = 800 * 1024; // 800KB
+
+interface TinyPngResponse {
+  input: { size: number; type: string };
+  output: { size: number; type: string; url: string; width: number; height: number; ratio: number };
+}
+
 // Wallhaven API 配置
 const API_BASE = "https://wallhaven.cc/api/v1/search";
 const DEFAULT_PARAMS = "ratios=9x16,10x16,9x18&sorting=relevance&order=desc";
@@ -62,6 +75,62 @@ async function fileExists(path: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+// 生成随机 IP
+function randomIp(): string {
+  return Array.from({ length: 4 }, () => Math.floor(Math.random() * 256)).join(".");
+}
+
+// 随机选择 TinyPNG 域名
+function randomDomain(): string {
+  return TINYPNG_DOMAINS[Math.floor(Math.random() * TINYPNG_DOMAINS.length)];
+}
+
+// 使用 TinyPNG Web API 压缩图片
+async function compressImage(buffer: ArrayBuffer, fileType: string): Promise<ArrayBuffer | null> {
+  const domain = randomDomain();
+  const contentType = fileType === "image/jpeg" ? "image/jpeg" : "image/png";
+
+  try {
+    // Step 1: 上传图片获取压缩后的下载 URL
+    const uploadRes = await fetch(`${domain}/backend/opt/shrink`, {
+      method: "POST",
+      headers: {
+        "Content-Type": contentType,
+        "X-Forwarded-For": randomIp(),
+      },
+      body: buffer,
+    });
+
+    if (!uploadRes.ok) {
+      console.warn(`⚠️  TinyPNG upload failed (${uploadRes.status})`);
+      return null;
+    }
+
+    const result = (await uploadRes.json()) as TinyPngResponse;
+
+    if (!result.output?.url) {
+      console.warn("⚠️  TinyPNG response missing download URL");
+      return null;
+    }
+
+    console.log(
+      `🗜️  TinyPNG: ${(result.input.size / 1024).toFixed(0)}KB → ${(result.output.size / 1024).toFixed(0)}KB (ratio: ${(result.output.ratio * 100).toFixed(1)}%)`
+    );
+
+    // Step 2: 下载压缩后的图片
+    const downloadRes = await fetch(result.output.url);
+    if (!downloadRes.ok) {
+      console.warn(`⚠️  TinyPNG download failed (${downloadRes.status})`);
+      return null;
+    }
+
+    return await downloadRes.arrayBuffer();
+  } catch (error) {
+    console.warn("⚠️  TinyPNG compression failed:", error);
+    return null;
   }
 }
 
@@ -178,7 +247,24 @@ async function downloadImage(
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const buffer = await response.arrayBuffer();
+    let buffer = await response.arrayBuffer();
+
+    // 检查文件大小，超过阈值则压缩
+    if (buffer.byteLength > COMPRESS_THRESHOLD) {
+      console.log(
+        `📦 ${filename} is ${(buffer.byteLength / 1024).toFixed(0)}KB, compressing...`
+      );
+      const compressed = await compressImage(buffer, wallpaper.file_type);
+      if (compressed && compressed.byteLength < buffer.byteLength) {
+        console.log(
+          `✅ Compressed: ${(buffer.byteLength / 1024).toFixed(0)}KB → ${(compressed.byteLength / 1024).toFixed(0)}KB`
+        );
+        buffer = compressed;
+      } else {
+        console.log(`⏭️  Skipped compression (no improvement)`);
+      }
+    }
+
     await writeFile(filepath, Buffer.from(buffer));
     console.log(
       `✅ Downloaded ${filename} (${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB)`
