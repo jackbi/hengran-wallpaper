@@ -321,6 +321,19 @@ async function main() {
   console.log(`📄 Will fetch: ${startPage} to ${totalPages}`);
   console.log(`📁 Output directory: ${IMAGES_DIR}\n`);
 
+  // 读取现有索引中的 totalImages（用于累加统计）
+  let existingTotalImages = 0;
+  if (!resetArg) {
+    try {
+      if (await fileExists(INDEX_FILE)) {
+        const existingIndex = JSON.parse(await readFile(INDEX_FILE, "utf-8"));
+        existingTotalImages = existingIndex.totalImages || 0;
+      }
+    } catch (e) {
+      console.warn("⚠️  Failed to read existing index:", e);
+    }
+  }
+
   // 下载统计
   let downloaded = 0;
   let skipped = 0;
@@ -394,8 +407,10 @@ async function main() {
     }
   }
 
-  // 更新总索引
-  await updateIndex(totalPages, totalImagesSaved);
+  const cumulativeTotal = existingTotalImages + totalImagesSaved;
+
+  // 更新总索引（累加已有计数）
+  await updateIndex(totalPages, cumulativeTotal);
 
   // 保存状态
   await saveState({
@@ -410,7 +425,7 @@ async function main() {
   console.log(`   ⏭️  Skipped (already exists): ${skipped}`);
   console.log(`   ❌ Failed: ${failed}`);
   console.log(`   📄 Pages fetched: ${startPage} - ${totalPages}`);
-  console.log(`   📁 Total images: ${totalImagesSaved}`);
+  console.log(`   📁 Total images (cumulative): ${cumulativeTotal}`);
   console.log(`\n🎉 Completed!`);
 }
 
